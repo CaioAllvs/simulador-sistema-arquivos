@@ -1,0 +1,5 @@
+*.class
+dados/*.dat
+dados/*.tmp
+dados/*.log
+.DS_Store
