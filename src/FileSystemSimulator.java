@@ -1,3 +1,7 @@
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -9,6 +13,7 @@ import java.util.Map;
 
 /** Um disco virtual salvo em dados/sistema.dat e protegido pelo journal. */
 public class FileSystemSimulator {
+    private static final int ASSINATURA = 0x53465332; // SFS2
     private final Path imagem;
     private final Journal journal;
     private Directory raiz = new Directory("/");
@@ -29,10 +34,22 @@ public class FileSystemSimulator {
         imagem = pastaDados.resolve("sistema.dat");
         journal = new Journal(pastaDados.resolve("journal.log"));
         if (Files.exists(imagem)) {
-            try (ObjectInputStream entrada = new ObjectInputStream(Files.newInputStream(imagem))) {
-                Estado estado = (Estado) entrada.readObject();
-                raiz = estado.raiz;
-                ultimaSequencia = estado.ultimaSequencia;
+            try (DataInputStream disco = new DataInputStream(Files.newInputStream(imagem))) {
+                if (disco.readInt() != ASSINATURA) {
+                    throw new IOException("Imagem antiga ou invalida. Faca backup e inicie uma pasta dados vazia.");
+                }
+                int tamanho = disco.readInt();
+                int checksum = disco.readInt();
+                if (tamanho < 0 || tamanho > 100_000_000 || tamanho != disco.available()) {
+                    throw new IOException("Tamanho invalido na imagem.");
+                }
+                byte[] original = BinaryCodec.transformar(disco.readNBytes(tamanho));
+                BinaryCodec.conferir(original, checksum);
+                try (ObjectInputStream entrada = new ObjectInputStream(new ByteArrayInputStream(original))) {
+                    Estado estado = (Estado) entrada.readObject();
+                    raiz = estado.raiz;
+                    ultimaSequencia = estado.ultimaSequencia;
+                }
             } catch (ClassNotFoundException e) {
                 throw new IOException("Nao foi possivel abrir o disco virtual.", e);
             }
@@ -150,8 +167,16 @@ public class FileSystemSimulator {
 
     private void salvar() throws IOException {
         Path temporario = imagem.resolveSibling("sistema.tmp");
-        try (ObjectOutputStream saida = new ObjectOutputStream(Files.newOutputStream(temporario))) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ObjectOutputStream saida = new ObjectOutputStream(bytes)) {
             saida.writeObject(new Estado(raiz, ultimaSequencia));
+        }
+        byte[] original = bytes.toByteArray();
+        try (DataOutputStream disco = new DataOutputStream(Files.newOutputStream(temporario))) {
+            disco.writeInt(ASSINATURA);
+            disco.writeInt(original.length);
+            disco.writeInt(BinaryCodec.checksum(original));
+            disco.write(BinaryCodec.transformar(original));
         }
         try {
             Files.move(temporario, imagem, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
