@@ -7,7 +7,7 @@
 
 ## Resumo
 
-Este projeto apresenta um simulador simples de sistema de arquivos em Java. O programa permite criar, copiar, apagar e renomear arquivos e diretórios, além de listar o conteúdo das pastas. As alterações ficam armazenadas em um arquivo que representa um disco virtual e são registradas em um **journal**, ajudando a recuperar o estado após uma interrupção.
+Este projeto apresenta um simulador simples de sistema de arquivos em Java. O programa permite criar, copiar, apagar e renomear arquivos e diretórios, além de listar o conteúdo das pastas. As alterações ficam armazenadas em uma **imagem binária codificada** que representa um disco virtual e são registradas em um **journal binário**, ajudando a recuperar o estado após uma interrupção.
 
 ## Introdução e objetivo
 
@@ -32,7 +32,7 @@ Existem diferentes abordagens:
 
 ## Parte 2 — Arquitetura do simulador
 
-A arquitetura foi feita com seis classes:
+A arquitetura foi feita com sete classes:
 
 | Classe | Responsabilidade |
 |---|---|
@@ -41,12 +41,13 @@ A arquitetura foi feita com seis classes:
 | `Node` | Classe base de arquivos e diretórios. |
 | `File` | Representa um arquivo, com nome e conteúdo de texto. |
 | `Directory` | Representa uma pasta e seus itens. |
-| `Journal` | Grava e lê o histórico de operações. |
+| `Journal` | Grava e lê o histórico binário de operações. |
+| `BinaryCodec` | Codifica e decodifica bytes de forma reversível e verifica integridade com CRC32. |
 
 **Arquivos de armazenamento:**
 
-- `dados/sistema.dat`: imagem serializada do sistema de arquivos, com seu estado e número da última operação aplicada.
-- `dados/journal.log`: histórico de operações em linhas com número sequencial, comando e argumentos codificados em Base64.
+- `dados/sistema.dat`: imagem binária codificada, contendo o estado e o número da última operação aplicada.
+- `dados/journal.log`: histórico de registros binários com número sequencial, comando, argumentos e verificação CRC32.
 
 **Fluxo de uma operação:**
 
@@ -54,7 +55,7 @@ A arquitetura foi feita com seis classes:
 2. O simulador valida o comando e seus parâmetros.
 3. O `Journal` grava a operação e força a gravação do log.
 4. O simulador modifica a estrutura em memória.
-5. O programa salva o novo estado em `sistema.dat`.
+5. O programa transforma os bytes do estado com uma codificação reversível, verifica CRC32 e salva em `sistema.dat`.
 
 **Recuperação:** ao reiniciar, o programa carrega `sistema.dat` e reaplica as entradas do journal com numeração maior que a última operação salva. Assim, uma operação registrada no journal, mas ainda não salva na imagem, pode ser recuperada.
 
@@ -88,6 +89,7 @@ simulador-sistema-arquivos/
 │   ├── File.java
 │   ├── Directory.java
 │   ├── Journal.java
+│   ├── BinaryCodec.java
 │   └── FileSystemSimulator.java
 └── dados/
     ├── sistema.dat      (criado ao executar)
@@ -141,13 +143,24 @@ O comando `ls /docs` mostrará dois arquivos; após a renomeação, `ls /` mostr
 
 **Atenção:** o teste de recuperação deve ser feito somente com o simulador fechado. Nunca edite manualmente o journal.
 
+### Como demonstrar o armazenamento binário
+
+1. Crie um arquivo: `touch /teste.txt MensagemSecreta123`.
+2. Feche o simulador (`exit`).
+3. Abra `dados/sistema.dat` e `dados/journal.log` no Notepad++: os arquivos são binários codificados, e o texto `MensagemSecreta123` não deve aparecer diretamente.
+4. Execute `java -cp src Main` e depois `cat /teste.txt`: o conteúdo original será apresentado normalmente.
+
+**Importante:** a transformação binária usada no projeto é **reversível, não é criptografia nem proteção contra acesso não autorizado**. O objetivo é representar um formato próprio de armazenamento que não pode ser lido diretamente como texto. O CRC32 detecta alterações acidentais, mas não substitui mecanismos avançados de integridade ou segurança.
+
+**Compatibilidade:** a nova versão usa os cabeçalhos `SFS2` e `JRN2`. Se você utilizou a versão anterior do simulador, faça backup da pasta `dados` e inicie a nova versão com uma pasta `dados` vazia. Não misture arquivos antigos com os novos.
+
 ## Metodologia
 
 Primeiro foram criadas classes para representar arquivos e diretórios. Depois foram implementados os métodos de manipulação, com validação para evitar operações inválidas. Por último, o journal foi conectado ao armazenamento do estado e foi criado um terminal simples para executar os comandos.
 
 ## Resultados obtidos
 
-Nos testes locais, o simulador conseguiu criar, copiar, renomear, apagar e listar arquivos e diretórios corretamente. Também foi confirmado que o estado continua disponível ao reiniciar o programa. O journaling demonstra como um registro de operações pode ajudar a reconstruir o estado do sistema.
+Nos testes locais, o simulador conseguiu criar, copiar, renomear, apagar e listar arquivos e diretórios corretamente. Também foi confirmado que o estado continua disponível ao reiniciar o programa. O journaling demonstra como um registro de operações pode ajudar a reconstruir o estado do sistema. A imagem e o journal em formato binário codificado evitam a leitura direta dos textos em editores comuns.
 
 ## Conclusão
 
