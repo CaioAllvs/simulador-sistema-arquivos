@@ -90,6 +90,7 @@ simulador-sistema-arquivos/
 │   ├── Directory.java
 │   ├── Journal.java
 │   ├── BinaryCodec.java
+│   ├── TesteSimulador.java
 │   └── FileSystemSimulator.java
 └── dados/
     ├── sistema.dat      (criado ao executar)
@@ -114,6 +115,14 @@ simulador-sistema-arquivos/
    ```
 
 4. Digite os comandos. Para consultar a ajuda, digite `help`. Para sair, digite `exit`.
+
+Para executar o teste automático, após compilar:
+
+```bash
+java -cp src TesteSimulador
+```
+
+O teste cria dados apenas em uma pasta temporária e verifica operações, ausência de conteúdo textual direto no disco e recuperação pelo journal.
 
 **Demonstração completa para apresentar em sala:**
 
